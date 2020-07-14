@@ -8,6 +8,8 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ## [Unreleased]
 
+- Create Makefile.proto makefile used for updating pb.go files from new version of protobuf definition.
+
 ## [0.8.0] - 2020-07-09
 
 ### Added
