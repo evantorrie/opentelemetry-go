@@ -20,12 +20,13 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+
 	colmetricpb "go.opentelemetry.io/otel/internal/opentelemetry-proto-gen/collector/metrics/v1"
 	commonpb "go.opentelemetry.io/otel/internal/opentelemetry-proto-gen/common/v1"
 	metricpb "go.opentelemetry.io/otel/internal/opentelemetry-proto-gen/metrics/v1"
 	resourcepb "go.opentelemetry.io/otel/internal/opentelemetry-proto-gen/resource/v1"
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 
 	"go.opentelemetry.io/otel/api/kv"
 	"go.opentelemetry.io/otel/api/label"

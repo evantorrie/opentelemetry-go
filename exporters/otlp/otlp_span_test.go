@@ -19,13 +19,14 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/assert"
+	"google.golang.org/grpc"
+	"google.golang.org/grpc/codes"
+
 	coltracepb "go.opentelemetry.io/otel/internal/opentelemetry-proto-gen/collector/trace/v1"
 	commonpb "go.opentelemetry.io/otel/internal/opentelemetry-proto-gen/common/v1"
 	resourcepb "go.opentelemetry.io/otel/internal/opentelemetry-proto-gen/resource/v1"
 	tracepb "go.opentelemetry.io/otel/internal/opentelemetry-proto-gen/trace/v1"
-	"github.com/stretchr/testify/assert"
-	"google.golang.org/grpc"
-	"google.golang.org/grpc/codes"
 
 	"go.opentelemetry.io/otel/api/kv"
 	apitrace "go.opentelemetry.io/otel/api/trace"
