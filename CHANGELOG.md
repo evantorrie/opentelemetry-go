@@ -8,6 +8,101 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ## [Unreleased]
 
+### Changed
+
+- Rename `sdk/metric/processor/test` to `sdk/metric/processor/processortest`
+- Rename `sdk/metric/controller/test` to `sdk/metric/controller/controllertest`
+- Rename `api/testharness` to `api/apitest`
+- Rename `api/trace/testtrace` to `api/trace/tracetest`
+- The `go.opentelemetry.io/otel/bridge/opentracing` bridge package has been made into its own module.
+   This removes the package dependencies of this bridge from the rest of the OpenTelemetry based project. (#1038)
+- Renamed `go.opentelemetry.io/otel/api/standard` package to `go.opentelemetry.io/otel/semconv` to avoid the ambiguous and generic name `standard` and better describe the package as containing OpenTelemetry semantic conventions. (#1016)
+- The environment variable used for resource detection has been changed from `OTEL_RESOURCE_LABELS` to `OTEL_RESOURCE_ATTRIBUTES` (#1042)
+- Replace `WithSyncer` with `WithBatcher` in examples. (#1044)
+- Replace the `google.golang.org/grpc/codes` dependency in the API with an equivalent `go.opentelemetry.io/otel/codes` package. (#1046)
+
+### Removed
+
+- The `grpctrace` instrumentation was moved to the `go.opentelemetry.io/contrib` repository and out of this repository.
+   This move includes moving the `grpc` example to the `go.opentelemetry.io/contrib` as well. (#1027)
+- The `WithSpan` method of the `Tracer` interface.
+   The functionality this method provided was limited compared to what a user can provide themselves.
+   It was removed with the understanding that if there is sufficient user need it can be added back based on actual user usage. (#1043)
+
+### Fixed
+
+- The `semconv.HTTPServerMetricAttributesFromHTTPRequest()` function no longer generates the high-cardinality `http.request.content.length` label. (#1031)
+- Correct instrumentation version tag in Jaeger exporter. (#1037)
+- The SDK span will now set an error event if the `End` method is called during a panic (i.e. it was deferred). (#1043)
+
+## [0.10.0] - 2020-07-29
+
+This release migrates the default OpenTelemetry SDK into its own Go module, decoupling the SDK from the API and reducing dependencies for instrumentation packages.
+
+### Added
+
+- The Zipkin exporter now has `NewExportPipeline` and `InstallNewPipeline` constructor functions to match the common pattern.
+    These function build a new exporter with default SDK options and register the exporter with the `global` package respectively. (#944)
+- Add propagator option for gRPC instrumentation. (#986)
+- The `testtrace` package now tracks the `trace.SpanKind` for each span. (#987)
+
+### Changed
+
+- Replace the `RegisterGlobal` `Option` in the Jaeger exporter with an `InstallNewPipeline` constructor function.
+   This matches the other exporter constructor patterns and will register a new exporter after building it with default configuration. (#944)
+- The trace (`go.opentelemetry.io/otel/exporters/trace/stdout`) and metric (`go.opentelemetry.io/otel/exporters/metric/stdout`) `stdout` exporters are now merged into a single exporter at `go.opentelemetry.io/otel/exporters/stdout`.
+   This new exporter was made into its own Go module to follow the pattern of all exporters and decouple it from the `go.opentelemetry.io/otel` module. (#956, #963)
+- Move the `go.opentelemetry.io/otel/exporters/test` test package to `go.opentelemetry.io/otel/sdk/export/metric/metrictest`. (#962)
+- The `go.opentelemetry.io/otel/api/kv/value` package was merged into the parent `go.opentelemetry.io/otel/api/kv` package. (#968)
+  - `value.Bool` was replaced with `kv.BoolValue`.
+  - `value.Int64` was replaced with `kv.Int64Value`.
+  - `value.Uint64` was replaced with `kv.Uint64Value`.
+  - `value.Float64` was replaced with `kv.Float64Value`.
+  - `value.Int32` was replaced with `kv.Int32Value`.
+  - `value.Uint32` was replaced with `kv.Uint32Value`.
+  - `value.Float32` was replaced with `kv.Float32Value`.
+  - `value.String` was replaced with `kv.StringValue`.
+  - `value.Int` was replaced with `kv.IntValue`.
+  - `value.Uint` was replaced with `kv.UintValue`.
+  - `value.Array` was replaced with `kv.ArrayValue`.
+- Rename `Infer` to `Any` in the `go.opentelemetry.io/otel/api/kv` package. (#972)
+- Change `othttp` to use the `httpsnoop` package to wrap the `ResponseWriter` so that optional interfaces (`http.Hijacker`, `http.Flusher`, etc.) that are implemented by the original `ResponseWriter`are also implemented by the wrapped `ResponseWriter`. (#979)
+- Rename `go.opentelemetry.io/otel/sdk/metric/aggregator/test` package to `go.opentelemetry.io/otel/sdk/metric/aggregator/aggregatortest`. (#980)
+- Make the SDK into its own Go module called `go.opentelemetry.io/otel/sdk`. (#985)
+- Changed the default trace `Sampler` from `AlwaysOn` to `ParentOrElse(AlwaysOn)`. (#989)
+
+### Removed
+
+- The `IndexedAttribute` function from the `go.opentelemetry.io/otel/api/label` package was removed in favor of `IndexedLabel` which it was synonymous with. (#970)
+
+### Fixed
+
+- Bump github.com/golangci/golangci-lint from 1.28.3 to 1.29.0 in /tools. (#953)
+- Bump github.com/google/go-cmp from 0.5.0 to 0.5.1. (#957)
+- Use `global.Handle` for span export errors in the OTLP exporter. (#946)
+- Correct Go language formatting in the README documentation. (#961)
+- Remove default SDK dependencies from the `go.opentelemetry.io/otel/api` package. (#977)
+- Remove default SDK dependencies from the `go.opentelemetry.io/otel/instrumentation` package. (#983)
+- Move documented examples for `go.opentelemetry.io/otel/instrumentation/grpctrace` interceptors into Go example tests. (#984)
+
+## [0.9.0] - 2020-07-20
+
+### Added
+
+- A new Resource Detector interface is included to allow resources to be automatically detected and included. (#939)
+- A Detector to automatically detect resources from an environment variable. (#939)
+- Github action to generate protobuf Go bindings locally in `internal/opentelemetry-proto-gen`. (#938)
+- OTLP .proto files from `open-telemetry/opentelemetry-proto` imported as a git submodule under `internal/opentelemetry-proto`.
+   References to `github.com/open-telemetry/opentelemetry-proto` changed to `go.opentelemetry.io/otel/internal/opentelemetry-proto-gen`. (#942)
+
+### Changed
+
+- Non-nil value `struct`s for key-value pairs will be marshalled using JSON rather than `Sprintf`. (#948)
+
+### Removed
+
+- Removed dependency on `github.com/open-telemetry/opentelemetry-collector`. (#943)
+
 ## [0.8.0] - 2020-07-09
 
 ### Added
@@ -80,7 +175,7 @@ This release implements the v0.5.0 version of the OpenTelemetry specification.
 
 ### Added
 
-- The othttp instrumentation now includes default metrics. (#861) 
+- The othttp instrumentation now includes default metrics. (#861)
 - This CHANGELOG file to track all changes in the project going forward.
 - Support for array type attributes. (#798)
 - Apply transitive dependabot go.mod dependency updates as part of a new automatic Github workflow. (#844)
@@ -662,7 +757,9 @@ It contains api and sdk for trace and meter.
 - CODEOWNERS file to track owners of this project.
 
 
-[Unreleased]: https://github.com/open-telemetry/opentelemetry-go/compare/v0.8.0...HEAD
+[Unreleased]: https://github.com/open-telemetry/opentelemetry-go/compare/v0.10.0...HEAD
+[0.10.0]: https://github.com/open-telemetry/opentelemetry-go/releases/tag/v0.10.0
+[0.9.0]: https://github.com/open-telemetry/opentelemetry-go/releases/tag/v0.9.0
 [0.8.0]: https://github.com/open-telemetry/opentelemetry-go/releases/tag/v0.8.0
 [0.7.0]: https://github.com/open-telemetry/opentelemetry-go/releases/tag/v0.7.0
 [0.6.0]: https://github.com/open-telemetry/opentelemetry-go/releases/tag/v0.6.0

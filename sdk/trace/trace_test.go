@@ -25,15 +25,17 @@ import (
 	"time"
 
 	"go.opentelemetry.io/otel/api/global"
-	"go.opentelemetry.io/otel/api/kv/value"
 
 	"github.com/google/go-cmp/cmp"
-	"google.golang.org/grpc/codes"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+	grpccodes "google.golang.org/grpc/codes"
 
+	"go.opentelemetry.io/otel/api/apitest"
 	"go.opentelemetry.io/otel/api/kv"
-	"go.opentelemetry.io/otel/api/testharness"
 	"go.opentelemetry.io/otel/api/trace"
 	apitrace "go.opentelemetry.io/otel/api/trace"
+	otelcodes "go.opentelemetry.io/otel/codes"
 	ottest "go.opentelemetry.io/otel/internal/testing"
 	export "go.opentelemetry.io/otel/sdk/export/trace"
 	"go.opentelemetry.io/otel/sdk/instrumentation"
@@ -53,7 +55,7 @@ func init() {
 	tid, _ = apitrace.IDFromHex("01020304050607080102040810203040")
 	sid, _ = apitrace.SpanIDFromHex("0102040810203040")
 
-	global.SetHandler(new(discardHandler))
+	global.SetErrorHandler(new(discardHandler))
 }
 
 func TestTracerFollowsExpectedAPIBehaviour(t *testing.T) {
@@ -61,7 +63,7 @@ func TestTracerFollowsExpectedAPIBehaviour(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to create provider, err: %v\n", err)
 	}
-	harness := testharness.NewHarness(t)
+	harness := apitest.NewHarness(t)
 	subjectFactory := func() trace.Tracer {
 		return tp.Tracer("")
 	}
@@ -591,7 +593,7 @@ func TestSetSpanStatus(t *testing.T) {
 	tp, _ := NewProvider(WithSyncer(te))
 
 	span := startSpan(tp, "SpanStatus")
-	span.SetStatus(codes.Canceled, "canceled")
+	span.SetStatus(otelcodes.Canceled, "canceled")
 	got, err := endSpan(te, span)
 	if err != nil {
 		t.Fatal(err)
@@ -605,7 +607,7 @@ func TestSetSpanStatus(t *testing.T) {
 		ParentSpanID:           sid,
 		Name:                   "span0",
 		SpanKind:               apitrace.SpanKindInternal,
-		StatusCode:             codes.Canceled,
+		StatusCode:             grpccodes.Canceled,
 		StatusMessage:          "canceled",
 		HasRemoteParent:        true,
 		InstrumentationLibrary: instrumentation.Library{Name: "SpanStatus"},
@@ -617,7 +619,7 @@ func TestSetSpanStatus(t *testing.T) {
 
 func cmpDiff(x, y interface{}) string {
 	return cmp.Diff(x, y,
-		cmp.AllowUnexported(value.Value{}),
+		cmp.AllowUnexported(kv.Value{}),
 		cmp.AllowUnexported(export.Event{}))
 }
 
@@ -975,7 +977,7 @@ func TestRecordErrorWithStatus(t *testing.T) {
 
 	testErr := ottest.NewTestError("test error")
 	errTime := time.Now()
-	testStatus := codes.Unknown
+	testStatus := otelcodes.Unknown
 	span.RecordError(context.Background(), testErr,
 		apitrace.WithErrorTime(errTime),
 		apitrace.WithErrorStatus(testStatus),
@@ -994,7 +996,7 @@ func TestRecordErrorWithStatus(t *testing.T) {
 		ParentSpanID:    sid,
 		Name:            "span0",
 		SpanKind:        apitrace.SpanKindInternal,
-		StatusCode:      codes.Unknown,
+		StatusCode:      grpccodes.Unknown,
 		StatusMessage:   "",
 		HasRemoteParent: true,
 		MessageEvents: []export.Event{
@@ -1035,7 +1037,7 @@ func TestRecordErrorNil(t *testing.T) {
 		Name:                   "span0",
 		SpanKind:               apitrace.SpanKindInternal,
 		HasRemoteParent:        true,
-		StatusCode:             codes.OK,
+		StatusCode:             grpccodes.OK,
 		StatusMessage:          "",
 		InstrumentationLibrary: instrumentation.Library{Name: "RecordErrorNil"},
 	}
@@ -1146,4 +1148,27 @@ func TestWithInstrumentationVersion(t *testing.T) {
 	if diff := cmpDiff(got, want); diff != "" {
 		t.Errorf("WithResource:\n  -got +want %s", diff)
 	}
+}
+
+func TestSpanCapturesPanic(t *testing.T) {
+	var te testExporter
+	tp, _ := NewProvider(WithSyncer(&te))
+	_, span := tp.Tracer("CatchPanic").Start(
+		context.Background(),
+		"span",
+		apitrace.WithRecord(),
+	)
+
+	f := func() {
+		defer span.End()
+		panic(errors.New("error message"))
+	}
+	require.PanicsWithError(t, "error message", f)
+	require.Len(t, te.spans, 1)
+	require.Len(t, te.spans[0].MessageEvents, 1)
+	assert.Equal(t, te.spans[0].MessageEvents[0].Name, errorEventName)
+	assert.Equal(t, te.spans[0].MessageEvents[0].Attributes, []kv.KeyValue{
+		errorTypeKey.String("*errors.errorString"),
+		errorMessageKey.String("error message"),
+	})
 }

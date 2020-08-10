@@ -23,11 +23,7 @@ import (
 	"go.opentelemetry.io/otel/api/kv"
 	"go.opentelemetry.io/otel/api/metric"
 	"go.opentelemetry.io/otel/api/trace"
-	metricstdout "go.opentelemetry.io/otel/exporters/metric/stdout"
-	tracestdout "go.opentelemetry.io/otel/exporters/trace/stdout"
-	"go.opentelemetry.io/otel/sdk/metric/controller/push"
-	"go.opentelemetry.io/otel/sdk/resource"
-	sdktrace "go.opentelemetry.io/otel/sdk/trace"
+	"go.opentelemetry.io/otel/exporters/stdout"
 )
 
 var (
@@ -37,37 +33,15 @@ var (
 	anotherKey = kv.Key("ex.com/another")
 )
 
-// initTracer creates and registers trace provider instance.
-func initTracer() {
-	var err error
-	exp, err := tracestdout.NewExporter(tracestdout.Options{PrettyPrint: false})
-	if err != nil {
-		log.Panicf("failed to initialize trace stdout exporter %v", err)
-		return
-	}
-	tp, err := sdktrace.NewProvider(sdktrace.WithSyncer(exp),
-		sdktrace.WithConfig(sdktrace.Config{DefaultSampler: sdktrace.AlwaysSample()}),
-		sdktrace.WithResource(resource.New(kv.String("rk1", "rv11"), kv.Int64("rk2", 5))))
-	if err != nil {
-		log.Panicf("failed to initialize trace provider %v", err)
-	}
-	global.SetTraceProvider(tp)
-}
-
-func initMeter() *push.Controller {
-	pusher, err := metricstdout.InstallNewPipeline(metricstdout.Config{
-		Quantiles:   []float64{0.5, 0.9, 0.99},
-		PrettyPrint: false,
-	})
-	if err != nil {
-		log.Panicf("failed to initialize metric stdout exporter %v", err)
-	}
-	return pusher
-}
-
 func main() {
-	defer initMeter().Stop()
-	initTracer()
+	pusher, err := stdout.InstallNewPipeline([]stdout.Option{
+		stdout.WithQuantiles([]float64{0.5, 0.9, 0.99}),
+		stdout.WithPrettyPrint(),
+	}, nil)
+	if err != nil {
+		log.Fatalf("failed to initialize stdout export pipeline: %v", err)
+	}
+	defer pusher.Stop()
 
 	tracer := global.Tracer("ex.com/basic")
 	meter := global.Meter("ex.com/basic")
@@ -93,11 +67,13 @@ func main() {
 	valuerecorder := valuerecorderTwo.Bind(commonLabels...)
 	defer valuerecorder.Unbind()
 
-	err := tracer.WithSpan(ctx, "operation", func(ctx context.Context) error {
+	err = func(ctx context.Context) error {
+		var span trace.Span
+		ctx, span = tracer.Start(ctx, "operation")
+		defer span.End()
 
-		trace.SpanFromContext(ctx).AddEvent(ctx, "Nice operation!", kv.Key("bogons").Int(100))
-
-		trace.SpanFromContext(ctx).SetAttributes(anotherKey.String("yes"))
+		span.AddEvent(ctx, "Nice operation!", kv.Key("bogons").Int(100))
+		span.SetAttributes(anotherKey.String("yes"))
 
 		meter.RecordBatch(
 			// Note: call-site variables added as context Entries:
@@ -107,20 +83,18 @@ func main() {
 			valuerecorderTwo.Measurement(2.0),
 		)
 
-		return tracer.WithSpan(
-			ctx,
-			"Sub operation...",
-			func(ctx context.Context) error {
-				trace.SpanFromContext(ctx).SetAttributes(lemonsKey.String("five"))
+		return func(ctx context.Context) error {
+			var span trace.Span
+			ctx, span = tracer.Start(ctx, "Sub operation...")
+			defer span.End()
 
-				trace.SpanFromContext(ctx).AddEvent(ctx, "Sub span event")
+			span.SetAttributes(lemonsKey.String("five"))
+			span.AddEvent(ctx, "Sub span event")
+			valuerecorder.Record(ctx, 1.3)
 
-				valuerecorder.Record(ctx, 1.3)
-
-				return nil
-			},
-		)
-	})
+			return nil
+		}(ctx)
+	}(ctx)
 	if err != nil {
 		panic(err)
 	}
