@@ -23,6 +23,10 @@ jobs:
       id: autocommit
       with:
         commit_message: Auto-fix go.sum changes in dependent modules
+    - uses: actions-ecosystem/action-add-labels@v1
+      with:
+        github_token: ${{ secrets.GITHUB_TOKEN }}
+        labels: "Skip Changelog"
     - name: changes
       run: |
         echo "Changes detected: ${{ steps.autocommit.outputs.changes_detected }}"
